@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+definitions:
+
+metadata:
+  generateName: coinflip-
+  namespace: default
+spec:
+  entrypoint: coinflip
+  templates:
+    - name: coinflip
+      steps:
+        - - name: flip-coin
+            template: flip-coin
+            continueOn:
+              failed: true
+        - - name: itsthere
+            template: itsthere
+            when: "{{steps.flip-coin.status}} == Succeeded"
+          - name: itsnotthere
+            template: itsnotthere
+            when: "{{steps.flip-coin.status}} == Failed"
+
+    - name: flip-coin
+      script:
+        image: python:alpine3.6
+        command: [python]
+        source: |
+          import random
+          import sys
+          exitcode = 0 if random.randint(0,1) == 0 else 1
+          sys.exit(exitcode)
+
+    - name: itsthere
+      container:
+        image: alpine:3.7
+        command: [sh, -c]
+        args: ["exit 0"]
+
+    - name: itsnotthere
+      container:
+        image: alpine:3.7
+        command: [sh, -c]
+        args: ["exit 1"]

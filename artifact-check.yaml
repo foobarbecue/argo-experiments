@@ -1,0 +1,59 @@
+# A somewhat hacky pattern to check if an artifact exists
+
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: artifact-work-avoidance-antipattern
+  namespace: default
+spec:
+  entrypoint: do-if-artifact-does-not-exist
+  templates:
+    - name: do-if-artifact-does-not-exist
+      steps:
+        - - name: check-artifact
+            template: check-artifact
+            continueOn:
+              failed: true
+              error: true
+        - - name: its-there
+            template: its-there
+            when: "{{steps.check-artifact.status}} == Succeeded"
+          - name: its-not-there
+            template: its-not-there
+            when: "{{steps.check-artifact.status}} == Error"
+
+    - name: check-artifact
+      inputs:
+        parameters:
+          - name: artifact-filename
+            value: frump.txt
+        artifacts:
+          - name: work-output-artifact
+            path: /tmp/{{inputs.parameters.artifact-filename}}
+            s3:
+              bucket: my-bucket
+              endpoint: minio:9000
+              insecure: true
+              accessKeySecret:
+                name: my-minio-cred
+                key: accesskey
+              secretKeySecret:
+                name: my-minio-cred
+                key: secretkey
+              key: "{{inputs.parameters.artifact-filename}}"
+      script:
+        image: alpine:3.7
+        command: [sh, -c]
+        args: ["exit 0"] # could also actually check for artifact, but don't need to because init fails
+
+    - name: its-there
+      container:
+        image: alpine:3.7
+        command: [sh, -c]
+        args: ["exit 0"]
+
+    - name: its-not-there
+      container:
+        image: alpine:3.7
+        command: [sh, -c]
+        args: ["exit 1"]
